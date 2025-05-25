@@ -7,6 +7,7 @@ import (
 	"github.com/containerd/containerd/api/types"
 	runcmanager "github.com/containerd/containerd/v2/cmd/containerd-shim-runc-v2/manager"
 	"github.com/containerd/containerd/v2/pkg/shim"
+	"github.com/kelvinc/shiftpod/internal"
 )
 
 type shiftpodManager struct {
@@ -29,7 +30,7 @@ func (m *shiftpodManager) Start(ctx context.Context, id string, opts shim.StartO
 	// Starts the shim manager
 	params, err := m.shimManager.Start(ctx, id, opts)
 	if err != nil {
-		logger(ctx).Debugf("Start shimmanager failed: %v", err)
+		internal.Log.Debugf("Start shimmanager failed: %v", err)
 		return params, err
 	}
 
@@ -37,12 +38,12 @@ func (m *shiftpodManager) Start(ctx context.Context, id string, opts shim.StartO
 }
 
 func (m *shiftpodManager) Stop(ctx context.Context, id string) (shim.StopStatus, error) {
-	logger(ctx).Debugf("Stop called for ID: %s", id)
+	internal.Log.Debugf("Stop called for ID: %s", id)
 	return m.shimManager.Stop(ctx, id)
 }
 
 func (m *shiftpodManager) Info(ctx context.Context, optionsR io.Reader) (*types.RuntimeInfo, error) {
-	logger(ctx).Debugf("Info called")
+	internal.Log.Debugf("Info called")
 
 	return &types.RuntimeInfo{Name: m.Name()}, nil
 }

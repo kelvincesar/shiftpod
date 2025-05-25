@@ -13,7 +13,7 @@ echo "[*] Restarting k3s"
 sudo systemctl restart k3s
 
 echo "[*] Verifying binary installed:"
-sudo ls -lh /usr/local/bin/$BINARY
+sha256sum /usr/local/bin/$BINARY
 
 echo "[*] Waiting for cluster to be ready"
 sleep 5
