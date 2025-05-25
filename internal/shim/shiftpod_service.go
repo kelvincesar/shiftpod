@@ -6,10 +6,13 @@ import (
 	"sync"
 
 	taskAPI "github.com/containerd/containerd/api/runtime/task/v3"
+	runctypes "github.com/containerd/containerd/api/types/runc/options"
 	ptypes "github.com/containerd/containerd/v2/pkg/protobuf/types"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/log"
 	"github.com/kelvinc/shiftpod/internal"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type shiftpodService struct {
@@ -91,22 +94,6 @@ func (s *shiftpodService) Start(ctx context.Context, r *taskAPI.StartRequest) (*
 
 func (s *shiftpodService) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (*taskAPI.DeleteResponse, error) {
 	internal.Log.Infof("Delete called: ID=%s, ExecID=%s", r.ID, r.ExecID)
-
-	// Get the container from the map
-	container, err := s.getContainer(r.ID)
-	if err != nil {
-		internal.Log.Errorf("Failed to get container %s: %v", r.ID, err)
-		return s.runcService.Delete(ctx, r)
-	}
-
-	// Check if it has checkpoint enabled
-	if container.cfg.CheckpointEnabled() {
-		internal.Log.Debugf("Delete: ID=%s, ExecID=%s, Checkpoint enabled", r.ID, r.ExecID)
-
-	} else {
-		internal.Log.Debugf("Delete: ID=%s, ExecID=%s, Checkpoint not enabled", r.ID, r.ExecID)
-	}
-
 	return s.runcService.Delete(ctx, r)
 }
 
@@ -137,6 +124,53 @@ func (s *shiftpodService) Checkpoint(ctx context.Context, r *taskAPI.CheckpointT
 
 func (s *shiftpodService) Kill(ctx context.Context, r *taskAPI.KillRequest) (*ptypes.Empty, error) {
 	internal.Log.Debugf("Kill: ID=%s, ExecID=%s", r.ID, r.ExecID)
+	// Get the container from the map
+	container, err := s.getContainer(r.ID)
+	if err != nil {
+		internal.Log.Errorf("Failed to get container %s: %v", r.ID, err)
+		return s.runcService.Kill(ctx, r)
+	}
+
+	// Check if it has checkpoint enabled
+	if container.cfg.CheckpointEnabled() {
+		path := container.createCheckpointPath()
+		internal.Log.Debugf("Kill: ID=%s, ExecID=%s, Checkpoint path: %s", r.ID, r.ExecID, path)
+		// https://github.com/containerd/containerd/blob/v2.1.1/cmd/containerd-shim-runc-v2/runc/container.go#L229
+		options := &runctypes.CheckpointOptions{
+			Exit:                true,
+			OpenTcp:             true,
+			ExternalUnixSockets: true,
+			Terminal:            true,
+			FileLocks:           true,
+			CgroupsMode:         "soft",
+			ImagePath:           path,
+			WorkPath:            path,
+		}
+
+		raw, err := proto.Marshal(options)
+		if err != nil {
+			return nil, fmt.Errorf("falha ao serializar CheckpointOptions: %w", err)
+		}
+		anyOpts := &anypb.Any{
+			TypeUrl: "type.googleapis.com/containerd.runc.v1.CheckpointOptions",
+			Value:   raw,
+		}
+		_, err = s.runcService.Checkpoint(ctx, &taskAPI.CheckpointTaskRequest{
+			ID:      r.ID,
+			Path:    path,
+			Options: anyOpts,
+		})
+
+		if err != nil {
+
+			internal.Log.Errorf("Failed to checkpoint container %s: %v", r.ID, err)
+		} else {
+			internal.Log.Debugf("Checkpointed container %s successfully", r.ID)
+		}
+	} else {
+		internal.Log.Debugf("Kill: ID=%s, ExecID=%s, Checkpoint not enabled", r.ID, r.ExecID)
+	}
+
 	return s.runcService.Kill(ctx, r)
 }
 
