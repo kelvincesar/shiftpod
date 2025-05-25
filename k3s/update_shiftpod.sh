@@ -7,7 +7,7 @@ echo "[*] Updating shim binary..."
 sudo mv $BINARY /usr/local/bin/
 
 echo "[*] Deleting test pod"
-kubectl delete pod test-pod-shim --ignore-not-found
+kubectl delete deployment nginx
 
 echo "[*] Restarting k3s"
 sudo systemctl restart k3s

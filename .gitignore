@@ -41,4 +41,4 @@ go.work.sum
 # .idea/
 # .vscode/
 
-.xml
+*.xml

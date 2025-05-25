@@ -20,5 +20,5 @@ func SetupLogger() {
 	baseLogger.SetLevel(logrus.DebugLevel)
 
 	// logger com campo fixo
-	Log = baseLogger.WithField("component", "shiftpod")
+	Log = baseLogger.WithField("", "sp")
 }

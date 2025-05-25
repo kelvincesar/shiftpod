@@ -3,6 +3,7 @@ package shim
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	taskAPI "github.com/containerd/containerd/api/runtime/task/v3"
 	ptypes "github.com/containerd/containerd/v2/pkg/protobuf/types"
@@ -12,7 +13,9 @@ import (
 )
 
 type shiftpodService struct {
-	runcService taskAPI.TTRPCTaskService
+	runcService        taskAPI.TTRPCTaskService
+	mut                sync.Mutex
+	shiftpodContainers map[string]*ShiftpodContainer
 }
 
 // Builder for the wrapper
@@ -23,13 +26,53 @@ func NewShiftpodService(runcService taskAPI.TTRPCTaskService) (taskAPI.TTRPCTask
 	}
 	log.L.Info("Shiftpod wrapper initialized successfully")
 	return &shiftpodService{
-		runcService: runcService,
+		runcService:        runcService,
+		shiftpodContainers: make(map[string]*ShiftpodContainer),
 	}, nil
 }
 
-func (s *shiftpodService) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (*taskAPI.CreateTaskResponse, error) {
+func (s *shiftpodService) setContainer(id string, container *ShiftpodContainer) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
 
+	s.shiftpodContainers[id] = container
+}
+
+func (s *shiftpodService) getContainer(id string) (*ShiftpodContainer, error) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+
+	container, ok := s.shiftpodContainers[id]
+	if !ok {
+		return nil, fmt.Errorf("container %s not found", id)
+	}
+	return container, nil
+}
+
+func (s *shiftpodService) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (*taskAPI.CreateTaskResponse, error) {
 	internal.Log.Infof("Create called: ID=%s, Bundle=%s", r.ID, r.Bundle)
+
+	// Parse config and container spec
+	spec, err := GetSpec(r.Bundle)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := NewConfig(ctx, spec)
+	if err != nil {
+		internal.Log.Errorf("Failed to create config: %v", err)
+		return nil, err
+	}
+
+	// Store container information internaly
+	container := NewShiftpodContainer(ctx, r.ID, cfg)
+	s.setContainer(r.ID, container)
+	internal.Log.Debugf("Create: ID=%s, Bundle=%s, Config=%+v", r.ID, r.Bundle, cfg)
+
+	if cfg.CheckpointEnabled() {
+		internal.Log.Debugf("Checkpoint enabled for container %s", r.ID)
+	}
+
+	// Call runc service to create the container
 	resp, err := s.runcService.Create(ctx, r)
 	if err != nil {
 		if errdefs.IsNotImplemented(err) {
@@ -48,6 +91,22 @@ func (s *shiftpodService) Start(ctx context.Context, r *taskAPI.StartRequest) (*
 
 func (s *shiftpodService) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (*taskAPI.DeleteResponse, error) {
 	internal.Log.Infof("Delete called: ID=%s, ExecID=%s", r.ID, r.ExecID)
+
+	// Get the container from the map
+	container, err := s.getContainer(r.ID)
+	if err != nil {
+		internal.Log.Errorf("Failed to get container %s: %v", r.ID, err)
+		return s.runcService.Delete(ctx, r)
+	}
+
+	// Check if it has checkpoint enabled
+	if container.cfg.CheckpointEnabled() {
+		internal.Log.Debugf("Delete: ID=%s, ExecID=%s, Checkpoint enabled", r.ID, r.ExecID)
+
+	} else {
+		internal.Log.Debugf("Delete: ID=%s, ExecID=%s, Checkpoint not enabled", r.ID, r.ExecID)
+	}
+
 	return s.runcService.Delete(ctx, r)
 }
 
