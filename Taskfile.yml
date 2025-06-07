@@ -63,3 +63,12 @@ tasks:
   check:
     desc: Run all checks (fmt, vet, lint, test)
     deps: [fmt, vet, lint, test]
+  
+  k3d:create:
+    desc: Create K3D cluster
+    cmds:
+      - k3d cluster create shift-cluster \
+        --servers 1 --agents 1 \
+        --volume "$(realpath ./k3s/config.toml.tmpl)":/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl@all \
+        --volume "$(realpath ./build/containerd-shim-shiftpod-v2)":/usr/local/bin/containerd-shim-shiftpod-v2@all
+
