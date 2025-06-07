@@ -14,6 +14,7 @@
     pkgs.delve
     pkgs.golangci-lint
     pkgs.gopls
+    pkgs.kubectl
   ];
 
   # https://devenv.sh/languages/
@@ -32,6 +33,8 @@
   '';
 
   enterShell = ''
+    export SHELL=$(which zsh)
+    exec $SHELL -i 
     hello
     go version
   '';
