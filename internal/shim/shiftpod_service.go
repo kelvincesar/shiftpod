@@ -6,13 +6,10 @@ import (
 	"sync"
 
 	taskAPI "github.com/containerd/containerd/api/runtime/task/v3"
-	runctypes "github.com/containerd/containerd/api/types/runc/options"
 	ptypes "github.com/containerd/containerd/v2/pkg/protobuf/types"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/log"
 	"github.com/kelvinc/shiftpod/internal"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type shiftpodService struct {
@@ -136,7 +133,7 @@ func (s *shiftpodService) Kill(ctx context.Context, r *taskAPI.KillRequest) (*pt
 		path := container.createCheckpointPath()
 		internal.Log.Debugf("Kill: ID=%s, ExecID=%s, Checkpoint path: %s", r.ID, r.ExecID, path)
 		// https://github.com/containerd/containerd/blob/v2.1.1/cmd/containerd-shim-runc-v2/runc/container.go#L229
-		options := &runctypes.CheckpointOptions{
+		/*options := &runctypes.CheckpointOptions{
 			Exit:                true,
 			OpenTcp:             true,
 			ExternalUnixSockets: true,
@@ -154,11 +151,10 @@ func (s *shiftpodService) Kill(ctx context.Context, r *taskAPI.KillRequest) (*pt
 		anyOpts := &anypb.Any{
 			TypeUrl: "type.googleapis.com/containerd.runc.v1.CheckpointOptions",
 			Value:   raw,
-		}
+		*/
 		_, err = s.runcService.Checkpoint(ctx, &taskAPI.CheckpointTaskRequest{
-			ID:      r.ID,
-			Path:    path,
-			Options: anyOpts,
+			ID:   r.ID,
+			Path: path,
 		})
 
 		if err != nil {
