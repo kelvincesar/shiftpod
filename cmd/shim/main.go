@@ -6,7 +6,6 @@ import (
 	"github.com/containerd/containerd/v2/pkg/shim"
 	"github.com/containerd/log"
 	"github.com/kelvinc/shiftpod/internal"
-
 	shiftpodshim "github.com/kelvinc/shiftpod/internal/shim"
 )
 

@@ -66,9 +66,26 @@ tasks:
   
   k3d:create:
     desc: Create K3D cluster
+    deps: [build]
     cmds:
-      - k3d cluster create shift-cluster \
+      - |
+        k3d cluster create shift-cluster \
+        --image rancher/k3s:v1.32.3-k3s1 \
         --servers 1 --agents 1 \
         --volume "$(realpath ./k3s/config.toml.tmpl)":/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl@all \
         --volume "$(realpath ./build/containerd-shim-shiftpod-v2)":/usr/local/bin/containerd-shim-shiftpod-v2@all
+  k3d:apply_test_1:
+    desc: Apply pod test 1
+    cmds: 
+      - kubectl apply -f ./k3s/runtimeclass.yaml
+      - kubectl apply -f ./k3s/testpod.yaml
 
+  k3d:events:
+    desc: Get cluster events
+    cmds:
+      - kubectl get events --sort-by=.metadata.creationTimestamp
+
+  shim:logs:
+    desc: Get shim logs from k3d
+    cmds:
+      - docker exec k3d-shift-cluster-agent-0 cat /tmp/shiftpod.log

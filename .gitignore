@@ -42,3 +42,4 @@ go.work.sum
 # .vscode/
 
 *.xml
+build/

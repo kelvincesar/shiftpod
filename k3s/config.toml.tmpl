@@ -1,5 +1,8 @@
 {{ template "base" . }}
 
+[debug]
+  level = "debug"
+
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."shiftpod"]
   runtime_type = "io.containerd.shiftpod.v2"
   pod_annotations = [
