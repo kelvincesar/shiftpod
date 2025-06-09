@@ -160,6 +160,7 @@ func (s *shiftpodService) Kill(ctx context.Context, r *taskAPI.KillRequest) (*pt
 		if err != nil {
 
 			internal.Log.Errorf("Failed to checkpoint container %s: %v", r.ID, err)
+			return nil, fmt.Errorf("failed to checkpoint container %s: %w", r.ID, err)
 		} else {
 			internal.Log.Debugf("Checkpointed container %s successfully", r.ID)
 		}

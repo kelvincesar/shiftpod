@@ -53,32 +53,25 @@ tasks:
     generates:
       - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
 
-  install:
-    desc: Install the shim binary to system path
-    deps: [build]
-    cmds:
-      - sudo scp ./{{.BUILD_DIR}}/{{.BINARY_NAME}} kelvinc@192.168.0.235:/home/kelvinc/shiftpod
-      - sha256sum ./{{.BUILD_DIR}}/{{.BINARY_NAME}}
-
   check:
     desc: Run all checks (fmt, vet, lint, test)
     deps: [fmt, vet, lint, test]
   
   k3d:build:
     desc: Build custom image to run k3s with criu
+    deps: [build]
     cmds:
       - docker build -f ./k3s/Dockerfile.k3s-criu -t shiftpod/k3s-criu:1.32.3 .
 
   k3d:create:
     desc: Create K3D cluster
-    deps: [build]
     cmds:
       - |
         k3d cluster create shift-cluster \
         --image shiftpod/k3s-criu:1.32.3 \
         --servers 1 --agents 1 \
 
-  k3d:apply_test_1:
+  k3d:test_1:
     desc: Apply pod test 1
     cmds: 
       - kubectl apply -f ./k3s/runtimeclass.yaml

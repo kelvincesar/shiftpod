@@ -1,4 +1,4 @@
-FROM alpine:3.20 as base
+FROM alpine:3.20 as build
 
 ARG CC=gcc
 ARG CRIU_VERSION=v4.1
@@ -28,7 +28,8 @@ RUN apk --update --no-cache add \
 	libcap-utils \
 	libdrm-dev \
 	util-linux \
-	util-linux-dev
+	util-linux-dev \
+    tar
 
 WORKDIR /workspace
 
@@ -43,9 +44,19 @@ RUN make -j $(nproc) CC="$CC"
 RUN mkdir criu-libs/ && \
     for l in $(ldd criu/criu | awk '{ print $3 }'); do cp $l criu-libs/; done
 
+# extract tar binary and its dependencies
+RUN cp $(which tar) /workspace/gnu-tar && \
+    mkdir /workspace/gnu-tar-libs && \
+    for l in $(ldd $(which tar) | awk '{ print $3 }' | grep -v '^$'); do cp $l /workspace/gnu-tar-libs/; done
+
 
 # rancher k3s image
 FROM rancher/k3s:v1.32.3-k3s1
+
+# copy tar. needed because alpines uses busybox
+COPY --from=build /workspace/gnu-tar /opt/bin/tar
+COPY --from=build /workspace/gnu-tar-libs /lib/
+ENV PATH="/opt/bin:$PATH"
 
 # copy criu binaries and libs from build
 COPY --from=build /workspace/criu/criu/criu /bin/
@@ -54,5 +65,6 @@ COPY --from=build /workspace/criu/criu-libs /lib/
 # copy shiftpod shim and config files
 COPY build/containerd-shim-shiftpod-v2 /usr/local/bin/
 COPY k3s/config.toml.tmpl /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+COPY k3s/criu.conf /etc/criu/default.conf
 
 ENTRYPOINT ["/bin/k3s"]
