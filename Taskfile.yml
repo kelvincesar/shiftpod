@@ -64,16 +64,20 @@ tasks:
     desc: Run all checks (fmt, vet, lint, test)
     deps: [fmt, vet, lint, test]
   
+  k3d:build:
+    desc: Build custom image to run k3s with criu
+    cmds:
+      - docker build -f ./k3s/Dockerfile.k3s-criu -t shiftpod/k3s-criu:1.32.3 .
+
   k3d:create:
     desc: Create K3D cluster
     deps: [build]
     cmds:
       - |
         k3d cluster create shift-cluster \
-        --image rancher/k3s:v1.32.3-k3s1 \
+        --image shiftpod/k3s-criu:1.32.3 \
         --servers 1 --agents 1 \
-        --volume "$(realpath ./k3s/config.toml.tmpl)":/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl@all \
-        --volume "$(realpath ./build/containerd-shim-shiftpod-v2)":/usr/local/bin/containerd-shim-shiftpod-v2@all
+
   k3d:apply_test_1:
     desc: Apply pod test 1
     cmds: 
