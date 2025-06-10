@@ -2,8 +2,8 @@ package shim
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type ShiftpodContainer struct {
@@ -23,7 +23,10 @@ func NewShiftpodContainer(ctx context.Context, id string, cfg *Config) *Shiftpod
 
 func (c *ShiftpodContainer) createCheckpointPath() string {
 	if c.checkpointPath == "" {
-		c.checkpointPath = fmt.Sprintf("/var/lib/shiftpod/checkpoints/%s", c.ID)
+		c.checkpointPath = filepath.Join(
+			"/var/lib/shiftpod/checkpoints",
+			c.cfg.ContainerName,
+		)
 		os.MkdirAll(c.checkpointPath, 0755)
 	}
 	return c.checkpointPath

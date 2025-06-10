@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	taskAPI "github.com/containerd/containerd/api/runtime/task/v3"
@@ -32,22 +33,45 @@ func NewShiftpodService(runcService taskAPI.TTRPCTaskService) (taskAPI.TTRPCTask
 	}, nil
 }
 
-func (s *shiftpodService) setContainer(id string, container *ShiftpodContainer) {
+func (s *shiftpodService) setContainer(container *ShiftpodContainer) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-
-	s.shiftpodContainers[id] = container
+	name := container.cfg.ContainerName
+	s.shiftpodContainers[name] = container
 }
 
-func (s *shiftpodService) getContainer(id string) (*ShiftpodContainer, error) {
+func (s *shiftpodService) getContainerById(id string) (*ShiftpodContainer, error) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
-
-	container, ok := s.shiftpodContainers[id]
-	if !ok {
-		return nil, fmt.Errorf("container %s not found", id)
+	if id == "" {
+		return nil, fmt.Errorf("container ID cannot be empty")
 	}
-	return container, nil
+	if len(s.shiftpodContainers) == 0 {
+		return nil, fmt.Errorf("no containers found")
+	}
+
+	for _, container := range s.shiftpodContainers {
+		if container.ID == id {
+			return container, nil
+		}
+	}
+	return nil, fmt.Errorf("container with ID %s not found", id)
+}
+func (s *shiftpodService) getContainer(name string) (*ShiftpodContainer, error) {
+	s.mut.Lock()
+	defer s.mut.Unlock()
+	if name == "" {
+		return nil, fmt.Errorf("container name cannot be empty")
+	}
+	if len(s.shiftpodContainers) == 0 {
+		return nil, fmt.Errorf("no containers found")
+	}
+
+	if container, ok := s.shiftpodContainers[name]; ok {
+		internal.Log.Debugf("Found container with name %s: %+v", name, container)
+		return container, nil
+	}
+	return nil, fmt.Errorf("container with name %s not found", name)
 }
 
 func (s *shiftpodService) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (*taskAPI.CreateTaskResponse, error) {
@@ -64,13 +88,40 @@ func (s *shiftpodService) Create(ctx context.Context, r *taskAPI.CreateTaskReque
 		return nil, err
 	}
 
-	// Store container information internaly
-	container := NewShiftpodContainer(ctx, r.ID, cfg)
-	s.setContainer(r.ID, container)
-	internal.Log.Debugf("Create: ID=%s, Bundle=%s, Config=%+v", r.ID, r.Bundle, cfg)
+	// Check if a checkpoint exists for this container name
+	// Was trying to store in memory but shims are deleted with container/pod
+	checkpointPath := filepath.Join("/var/lib/shiftpod/checkpoints", cfg.ContainerName)
+	if _, err := os.Stat(checkpointPath); err == nil {
+		internal.Log.Infof("Checkpoint found for container %s, using restore path: %s", cfg.ContainerName, checkpointPath)
 
-	if cfg.CheckpointEnabled() {
-		internal.Log.Debugf("Checkpoint enabled for container %s", r.ID)
+		if cfg.CheckpointEnabled() {
+			internal.Log.Debugf("Container %s has checkpoint enabled, skipping creation", cfg.ContainerName)
+			restoreReq := &taskAPI.CreateTaskRequest{
+				ID:         r.ID,
+				Bundle:     r.Bundle,
+				Rootfs:     r.Rootfs,
+				Terminal:   r.Terminal,
+				Stdin:      r.Stdin,
+				Stdout:     r.Stdout,
+				Stderr:     r.Stderr,
+				Checkpoint: checkpointPath,
+			}
+			// Call runc service to create the container
+			resp, err := s.runcService.Create(ctx, restoreReq)
+			if err != nil {
+				if errdefs.IsNotImplemented(err) {
+					internal.Log.Info("Restore not implemented by underlying shim")
+				} else {
+					internal.Log.Errorf("Restore failed: %v", err)
+				}
+			}
+			return resp, err
+
+		}
+	} else {
+		container := NewShiftpodContainer(ctx, r.ID, cfg)
+		s.setContainer(container)
+		internal.Log.Debugf("Create: ID=%s, Bundle=%s, Config=%+v", r.ID, r.Bundle, cfg)
 	}
 
 	// Call runc service to create the container
@@ -123,9 +174,9 @@ func (s *shiftpodService) Checkpoint(ctx context.Context, r *taskAPI.CheckpointT
 func (s *shiftpodService) Kill(ctx context.Context, r *taskAPI.KillRequest) (*ptypes.Empty, error) {
 	internal.Log.Debugf("Kill: ID=%s, ExecID=%s", r.ID, r.ExecID)
 	// Get the container from the map
-	container, err := s.getContainer(r.ID)
+	container, err := s.getContainerById(r.ID)
 	if err != nil {
-		internal.Log.Errorf("Failed to get container %s: %v", r.ID, err)
+		internal.Log.Errorf("Kill - failed to get container %s: %v", r.ID, err)
 		return s.runcService.Kill(ctx, r)
 	}
 

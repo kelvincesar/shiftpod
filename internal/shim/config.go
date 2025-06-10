@@ -22,7 +22,7 @@ type Config struct {
 	spec             *specs.Spec
 	EnableCheckpoint bool
 	EnableMigrate    bool
-	containerName    string
+	ContainerName    string
 	containerType    string
 }
 
@@ -32,7 +32,7 @@ func NewConfig(ctx context.Context, spec *specs.Spec) (*Config, error) {
 	containerType := spec.Annotations[CRIContainerTypeAnnotation]
 	config := Config{
 		spec:             spec,
-		containerName:    containerName,
+		ContainerName:    containerName,
 		containerType:    containerType,
 		EnableCheckpoint: false,
 		EnableMigrate:    false,
@@ -55,7 +55,7 @@ func NewConfig(ctx context.Context, spec *specs.Spec) (*Config, error) {
 	}
 
 	internal.Log.Debugf("Config: EnableCheckpoint=%v, EnableMigrate=%v, containerName=%s, containerType=%s",
-		config.EnableCheckpoint, config.EnableMigrate, config.containerName, config.containerType)
+		config.EnableCheckpoint, config.EnableMigrate, config.ContainerName, config.containerType)
 	return &config, nil
 }
 
