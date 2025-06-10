@@ -1,0 +1,10 @@
+FROM alpine:latest AS builder
+RUN apk add --no-cache gcc musl-dev
+COPY ./k3s/counter/counter.c counter.c
+RUN gcc counter.c -o /counter
+
+FROM alpine:latest
+COPY --from=builder /counter /counter
+
+# redirect output to a file for inspection
+CMD ["/counter"]

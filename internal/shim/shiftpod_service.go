@@ -3,6 +3,7 @@ package shim
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	taskAPI "github.com/containerd/containerd/api/runtime/task/v3"
@@ -133,34 +134,16 @@ func (s *shiftpodService) Kill(ctx context.Context, r *taskAPI.KillRequest) (*pt
 		path := container.createCheckpointPath()
 		internal.Log.Debugf("Kill: ID=%s, ExecID=%s, Checkpoint path: %s", r.ID, r.ExecID, path)
 		// https://github.com/containerd/containerd/blob/v2.1.1/cmd/containerd-shim-runc-v2/runc/container.go#L229
-		/*options := &runctypes.CheckpointOptions{
-			Exit:                true,
-			OpenTcp:             true,
-			ExternalUnixSockets: true,
-			Terminal:            true,
-			FileLocks:           true,
-			CgroupsMode:         "soft",
-			ImagePath:           path,
-			WorkPath:            path,
-		}
 
-		raw, err := proto.Marshal(options)
-		if err != nil {
-			return nil, fmt.Errorf("falha ao serializar CheckpointOptions: %w", err)
-		}
-		anyOpts := &anypb.Any{
-			TypeUrl: "type.googleapis.com/containerd.runc.v1.CheckpointOptions",
-			Value:   raw,
-		*/
 		_, err = s.runcService.Checkpoint(ctx, &taskAPI.CheckpointTaskRequest{
 			ID:   r.ID,
 			Path: path,
 		})
 
 		if err != nil {
-
 			internal.Log.Errorf("Failed to checkpoint container %s: %v", r.ID, err)
-			return nil, fmt.Errorf("failed to checkpoint container %s: %w", r.ID, err)
+			// move criu log to tmp
+			moveCriuLog(r.ID)
 		} else {
 			internal.Log.Debugf("Checkpointed container %s successfully", r.ID)
 		}
@@ -209,4 +192,11 @@ func (s *shiftpodService) Connect(ctx context.Context, r *taskAPI.ConnectRequest
 func (s *shiftpodService) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (*ptypes.Empty, error) {
 	internal.Log.Debugf("Shutdown: ID=%s", r.ID)
 	return s.runcService.Shutdown(ctx, r)
+}
+
+func moveCriuLog(id string) error {
+	src := fmt.Sprintf("/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io/%s/criu-dump.log", id)
+	dst := fmt.Sprintf("/tmp/shiftpod/criu-dump-%s.log", id)
+	internal.Log.Infof("Criu log moved to %s", dst)
+	return os.Rename(src, dst)
 }

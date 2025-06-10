@@ -86,3 +86,10 @@ tasks:
     desc: Get shim logs from k3d
     cmds:
       - docker exec k3d-shift-cluster-agent-0 cat /tmp/shiftpod.log
+  
+  counter:build:
+    desc: Build counter example and deploy to k3d
+    cmds:
+      - docker build -f ./k3s/counter/Dockerfile.counter -t shiftpod/counter:latest .
+      - k3d image import kelvin/counter:latest -c shift-cluster
+      - kubectl rollout restart deployment counter
