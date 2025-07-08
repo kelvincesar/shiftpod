@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 
 vars:
   PROJECT_NAME: shiftpod
@@ -56,12 +56,15 @@ tasks:
   check:
     desc: Run all checks (fmt, vet, lint, test)
     deps: [fmt, vet, lint, test]
+<<<<<<< HEAD
   
   k3d:build:
     desc: Build custom image to run k3s with criu
     deps: [build]
     cmds:
       - docker build -f ./k3s/Dockerfile.k3s-criu -t shiftpod/k3s-criu:1.32.3 .
+=======
+>>>>>>> 211ad94 (feat: created manager to handle crd store of checkpoints)
 
   k3d:create:
     desc: Create K3D cluster
@@ -73,7 +76,7 @@ tasks:
 
   k3d:test_1:
     desc: Apply pod test 1
-    cmds: 
+    cmds:
       - kubectl apply -f ./k3s/runtimeclass.yaml
       - kubectl apply -f ./k3s/testpod.yaml
 
@@ -82,10 +85,18 @@ tasks:
     cmds:
       - kubectl get events --sort-by=.metadata.creationTimestamp
 
+  k3d:kubeconfig:
+    desc: Get kubeconfig for k3d cluster
+    cmds:
+      - k3d kubeconfig get shift-cluster > kube.config
+      - chmod 600 kube.config
+      - echo "export KUBECONFIG={{.PWD}}/kube.config"
+
   shim:logs:
     desc: Get shim logs from k3d
     cmds:
       - docker exec k3d-shift-cluster-agent-0 cat /tmp/shiftpod.log
+<<<<<<< HEAD
   
   counter:build:
     desc: Build counter example and deploy to k3d
@@ -93,3 +104,5 @@ tasks:
       - docker build -f ./k3s/counter/Dockerfile.counter -t shiftpod/counter:latest .
       - k3d image import kelvin/counter:latest -c shift-cluster
       - kubectl rollout restart deployment counter
+=======
+>>>>>>> 211ad94 (feat: created manager to handle crd store of checkpoints)

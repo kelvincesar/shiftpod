@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package shiftpod.manager.v1;
+
+service ManagerService {
+  rpc NotifyCheckpoint(NotifyCheckpointRequest) returns (NotifyCheckpointResponse);
+  rpc RequestMigrationRestore(MigrationRestoreRequest) returns (MigrationRestoreResponse);
+  rpc PullImage(PullImageRequest) returns (stream PullImageResponse);
+  rpc FinishRestore(FinishRestoreRequest) returns (FinishRestoreResponse);
+}
+
+message NotifyCheckpointRequest {
+  string container_id = 1;
+  string checkpoint_path = 2;
+  PodInfo pod_info = 3;
+}
+
+message NotifyCheckpointResponse {}
+
+message MigrationRestoreRequest {
+  string pod_template_hash = 1;
+  string pod_name = 2;
+  string container_name = 3;
+}
+
+message MigrationRestoreResponse {
+  bool found = 1;
+  string checkpoint_path = 2;
+}
+
+message PullImageRequest {
+  string checkpoint_path = 1;
+}
+
+message PullImageResponse {
+  bytes chunk = 1;
+}
+
+message FinishRestoreRequest {
+  string container_id = 1;
+  bool success = 2;
+}
+
+message FinishRestoreResponse {}
+
+message PodInfo {
+  string name = 1;
+  string namespace = 2;
+  string container_name = 3;
+  string template_hash = 4;
+}

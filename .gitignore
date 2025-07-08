@@ -44,3 +44,5 @@ go.work.sum
 *.xml
 build/
 logs/
+
+kube.config

@@ -5,7 +5,7 @@
   env.PROJECT = "shiftpod";
 
   # https://devenv.sh/packages/
-  packages = [ 
+  packages = [
     pkgs.git
     pkgs.go-task
     pkgs.protobuf
@@ -20,6 +20,7 @@
   # https://devenv.sh/languages/
   languages.go.enable = true;
   languages.go.enableHardeningWorkaround = true;
+  languages.rust.enable = true;
 
   # https://devenv.sh/processes/
   # processes.cargo-watch.exec = "cargo-watch";
@@ -34,9 +35,10 @@
 
   enterShell = ''
     export SHELL=$(which zsh)
-    exec $SHELL -i 
+    exec $SHELL -i
     hello
     go version
+    cargo --version
   '';
 
   # https://devenv.sh/tasks/

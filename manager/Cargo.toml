@@ -1,0 +1,49 @@
+[package]
+name = "shiftpod-manager"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Kubernetes
+kube = { version = "0.87", features = ["client", "derive"] }
+k8s-openapi = { version = "0.20", features = ["v1_28"] }
+schemars = "0.8"
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+
+# gRPC
+tonic = "0.10"
+prost = "0.12"
+
+# CLI
+clap = { version = "4.0", features = ["derive"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# File operations
+tar = "0.4"
+flate2 = "1.0"
+
+[build-dependencies]
+tonic-build = "0.10"
+
+[dev-dependencies]
+# Testing
+tempfile = "3.0"
+mockall = "0.11"
+serial_test = "3.0"
+
+# Test utilities
+uuid = { version = "1.0", features = ["v4"] }
