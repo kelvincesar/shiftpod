@@ -56,15 +56,12 @@ tasks:
   check:
     desc: Run all checks (fmt, vet, lint, test)
     deps: [fmt, vet, lint, test]
-<<<<<<< HEAD
 
   k3d:build:
     desc: Build custom image to run k3s with criu
     deps: [build]
     cmds:
       - docker build -f ./k3s/Dockerfile.k3s-criu -t shiftpod/k3s-criu:1.32.3 .
-=======
->>>>>>> 211ad94 (feat: created manager to handle crd store of checkpoints)
 
   k3d:create:
     desc: Create K3D cluster
