@@ -26,6 +26,7 @@ pub struct NodeInfo {
 
 impl ShiftpodManager {
     pub async fn new(node_name: &str, node_address: &str, checkpoint_dir: &str) -> Result<Self> {
+        // kubernetes api
         let k8s_client = Client::try_default().await?;
         let migrations_api: Api<ContainerMigration> = Api::all(k8s_client.clone());
 

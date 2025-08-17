@@ -9,11 +9,11 @@ devenv shell
 task build
 ```
 
-## k3s
+## Execute
 
-1. Change `/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl` inserting the content of config.toml.tmpl.
-2. Move `containerd-shim-shiftpod-v2` binary to `/usr/local/bin/`;
-3. Apply `kubectl apply -f runtimeclass.yaml`;
-4. Restart k3s `sudo systemctl restart k3s`;
-5. Apply `kubectl apply -f testpod.yaml`;
-6. Check `kubectl get pods` or `sudo journalctl -u k3s -f`.
+- Create K3D cluster with `task k3d`
+- Build shim image and criu files with `task k3d:build`
+- Build counter example with `task counter:build`
+- Open terminal on server node to check logs with `task k3d:terminal`
+- `cd /tmp/shiftpod` and `tail -f shim.log`;
+- On another terminal, `task counter:delete`

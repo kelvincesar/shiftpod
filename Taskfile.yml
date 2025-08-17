@@ -70,11 +70,15 @@ tasks:
         k3d cluster create shift-cluster \
         --image shiftpod/k3s-criu:1.32.3 \
         --servers 1 --agents 1 \
+  k3d:runtimeclass:
+    desc: Create runtimeclass for k3d cluster
+    cmds:
+      - kubectl apply -f ./k3s/runtimeclass.yaml
+      - kubectl get runtimeclass
 
   k3d:test_1:
     desc: Apply pod test 1
     cmds:
-      - kubectl apply -f ./k3s/runtimeclass.yaml
       - kubectl apply -f ./k3s/testpod.yaml
 
   k3d:events:
@@ -89,6 +93,16 @@ tasks:
       - chmod 600 kube.config
       - echo "export KUBECONFIG={{.PWD}}/kube.config"
 
+  k3d:terminal:
+    desc: Get terminal for k3d cluster
+    cmds:
+      - docker exec -it k3d-shift-cluster-server-0 /bin/sh
+
+  k3d:pods:
+    desc: Get pods for k3d cluster
+    cmds:
+      - kubectl get pods
+
   shim:logs:
     desc: Get shim logs from k3d
     cmds:
@@ -99,4 +113,15 @@ tasks:
     cmds:
       - docker build -f ./k3s/counter/Dockerfile.counter -t shiftpod/counter:latest .
       - k3d image import kelvin/counter:latest -c shift-cluster
+      - kubectl apply -f ./k3s/counter/deployment.yaml
       - kubectl rollout restart deployment counter
+
+  counter:logs:
+    desc: Get counter logs from k3d
+    cmds:
+      - kubectl logs counter
+
+  counter:delete:
+    desc: Delete counter example from k3d
+    cmds:
+      - kubectl delete deployment counter
