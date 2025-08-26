@@ -16,6 +16,9 @@ const (
 	EnableCheckpointAnnotation = "shiftpod/enable-checkpoint"
 	CRIContainerNameAnnotation = "io.kubernetes.cri.container-name"
 	CRIContainerTypeAnnotation = "io.kubernetes.cri.container-type"
+	PodNameAnnotation          = "io.kubernetes.pod.name"
+	PodNamespaceAnnotation     = "io.kubernetes.pod.namespace"
+	PodTemplateHashLabel       = "pod-template-hash"
 )
 
 type Config struct {
@@ -24,16 +27,36 @@ type Config struct {
 	EnableMigrate    bool
 	ContainerName    string
 	containerType    string
+	PodName          string
+	PodNamespace     string
+	PodTemplateHash  string
 }
 
 // Parse specs received from containerd
 func NewConfig(ctx context.Context, spec *specs.Spec) (*Config, error) {
 	containerName := spec.Annotations[CRIContainerNameAnnotation]
 	containerType := spec.Annotations[CRIContainerTypeAnnotation]
+	podName := spec.Annotations[PodNameAnnotation]
+	podNamespace := spec.Annotations[PodNamespaceAnnotation]
+
+	// Extract pod template hash from annotations if available
+	var podTemplateHash string
+	if spec.Annotations != nil {
+		// Look for pod template hash in various annotation formats
+		if val, ok := spec.Annotations["io.kubernetes.pod.template-hash"]; ok {
+			podTemplateHash = val
+		} else if val, ok := spec.Annotations["pod-template-hash"]; ok {
+			podTemplateHash = val
+		}
+	}
+
 	config := Config{
 		spec:             spec,
 		ContainerName:    containerName,
 		containerType:    containerType,
+		PodName:          podName,
+		PodNamespace:     podNamespace,
+		PodTemplateHash:  podTemplateHash,
 		EnableCheckpoint: false,
 		EnableMigrate:    false,
 	}
@@ -54,8 +77,8 @@ func NewConfig(ctx context.Context, spec *specs.Spec) (*Config, error) {
 		config.EnableMigrate = true
 	}
 
-	internal.Log.Debugf("Config: EnableCheckpoint=%v, EnableMigrate=%v, containerName=%s, containerType=%s",
-		config.EnableCheckpoint, config.EnableMigrate, config.ContainerName, config.containerType)
+	internal.Log.Debugf("Config: EnableCheckpoint=%v, EnableMigrate=%v, containerName=%s, containerType=%s, podName=%s, podNamespace=%s, podTemplateHash=%s",
+		config.EnableCheckpoint, config.EnableMigrate, config.ContainerName, config.containerType, config.PodName, config.PodNamespace, config.PodTemplateHash)
 	return &config, nil
 }
 

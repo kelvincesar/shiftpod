@@ -1,0 +1,89 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: containermigrations.shiftpod.io
+spec:
+  group: shiftpod.io
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required:
+                - pod_template_hash
+                - source_node
+                - source_pod
+                - containers
+              properties:
+                pod_template_hash:
+                  type: string
+                source_node:
+                  type: string
+                source_pod:
+                  type: string
+                target_node:
+                  type: string
+                  nullable: true
+                target_pod:
+                  type: string
+                  nullable: true
+                containers:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - name
+                      - id
+                      - image_server
+                      - checkpoint_path
+                    properties:
+                      name:
+                        type: string
+                      id:
+                        type: string
+                      image_server:
+                        type: string
+                      checkpoint_path:
+                        type: string
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum:
+                    - "Pending"
+                    - "Claimed"
+                    - "Migrating"
+                    - "Completed"
+                    - "Failed"
+                message:
+                  type: string
+                  nullable: true
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Source Node
+          type: string
+          jsonPath: .spec.source_node
+        - name: Target Node
+          type: string
+          jsonPath: .spec.target_node
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      subresources:
+        status: {}
+  scope: Cluster
+  names:
+    plural: containermigrations
+    singular: containermigration
+    kind: ContainerMigration
+    shortNames:
+      - cmig

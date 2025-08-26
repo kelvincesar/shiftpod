@@ -5,6 +5,8 @@ vars:
   BINARY_NAME: containerd-shim-shiftpod-v2
   BUILD_DIR: build
   CMD_DIR: cmd/shim
+  PROTO_DIR: proto
+  PROTO_OUT_DIR: proto
 
 tasks:
   default:
@@ -23,6 +25,31 @@ tasks:
     cmds:
       - go mod download
       - go mod tidy
+
+  proto:gen:
+    desc: Generate protobuf files for Go
+    cmds:
+      - mkdir -p {{.PROTO_OUT_DIR}}
+      - protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative {{.PROTO_DIR}}/manager.proto
+    generates:
+      - "{{.PROTO_OUT_DIR}}/manager.pb.go"
+      - "{{.PROTO_OUT_DIR}}/manager_grpc.pb.go"
+    sources:
+      - "{{.PROTO_DIR}}/manager.proto"
+
+  manager:build:
+    desc: Build the Rust manager service
+    dir: manager
+    cmds:
+      - cargo build --release
+    generates:
+      - "target/release/manager"
+
+  manager:proto:
+    desc: Ensure manager proto is regenerated
+    dir: manager
+    cmds:
+      - cargo build
 
   fmt:
     desc: Format Go code
@@ -46,22 +73,38 @@ tasks:
 
   build:
     desc: Build the containerd shim binary
-    deps: [deps]
+    deps: [deps, proto:gen]
     cmds:
       - mkdir -p {{.BUILD_DIR}}
       - CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o {{.BUILD_DIR}}/{{.BINARY_NAME}} ./{{.CMD_DIR}}
     generates:
       - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
 
+  build:all:
+    desc: Build both shim and manager
+    deps: [build, manager:build]
+
   check:
     desc: Run all checks (fmt, vet, lint, test)
-    deps: [fmt, vet, lint, test]
+    deps: [proto:gen, fmt, vet, lint, test]
+
+  manager:docker:
+    desc: Build manager Docker image
+    deps: [manager:build]
+    cmds:
+      - docker build -f manager/Dockerfile -t shiftpod/manager:latest .
 
   k3d:build:
     desc: Build custom image to run k3s with criu
     deps: [build]
     cmds:
-      - docker build -f ./k3s/Dockerfile.k3s-criu -t shiftpod/k3s-criu:1.32.3 .
+      - docker build -f ./k3s/k3s-criu.Dockerfile -t shiftpod/k3s-criu:1.32.3 .
+
+  k3d:import:
+    desc: Import manager image into k3d cluster
+    deps: [manager:docker]
+    cmds:
+      - k3d image import shiftpod/manager:latest -c shift-cluster
 
   k3d:create:
     desc: Create K3D cluster
@@ -70,11 +113,24 @@ tasks:
         k3d cluster create shift-cluster \
         --image shiftpod/k3s-criu:1.32.3 \
         --servers 1 --agents 1 \
+
   k3d:runtimeclass:
     desc: Create runtimeclass for k3d cluster
     cmds:
       - kubectl apply -f ./k3s/runtimeclass.yaml
       - kubectl get runtimeclass
+
+  k3d:deploy:manager:
+    desc: Deploy manager to k3d cluster
+    deps: [k3d:import]
+    cmds:
+      - kubectl apply -k k3s/manager/
+      - kubectl rollout status daemonset/shiftpod-manager -n kube-system
+
+  k3d:logs:manager:
+    desc: Get manager logs from k3d
+    cmds:
+      - kubectl logs daemonset/shiftpod-manager -n kube-system --all-containers=true --tail=50
 
   k3d:test_1:
     desc: Apply pod test 1
@@ -101,7 +157,7 @@ tasks:
   k3d:pods:
     desc: Get pods for k3d cluster
     cmds:
-      - kubectl get pods
+      - kubectl get pods -o wide
 
   shim:logs:
     desc: Get shim logs from k3d
@@ -125,3 +181,55 @@ tasks:
     desc: Delete counter example from k3d
     cmds:
       - kubectl delete deployment counter
+
+  test:integration:
+    desc: Run comprehensive integration tests
+    deps: [k3d:setup:full]
+    cmds:
+      - ./test-integration.sh
+
+  test:integration:checkpoint:
+    desc: Test checkpoint creation only
+    deps: [k3d:setup:full]
+    cmds:
+      - ./test-integration.sh checkpoint
+
+  test:integration:restore:
+    desc: Test checkpoint restoration only
+    deps: [k3d:setup:full]
+    cmds:
+      - ./test-integration.sh restore
+
+  test:integration:migrate:
+    desc: Test cross-node migration only
+    deps: [k3d:setup:full]
+    cmds:
+      - ./test-integration.sh migrate
+
+  test:integration:cleanup:
+    desc: Clean up integration test resources
+    cmds:
+      - ./test-integration.sh cleanup
+
+  test:integration:summary:
+    desc: Show integration test summary
+    cmds:
+      - ./test-integration.sh summary
+
+  k3d:restart:
+    desc: Restart k3d cluster to use updated shim
+    cmds:
+      - k3d cluster stop shift-cluster
+      - k3d cluster start shift-cluster
+      - echo "Waiting for cluster to be ready..."
+      - kubectl wait --for=condition=ready nodes --all --timeout=120s
+
+  k3d:setup:full:
+    desc: Full k3d cluster setup with manager
+    deps: [k3d:build, k3d:restart, k3d:runtimeclass, k3d:deploy:manager]
+    cmds:
+      - echo "K3d cluster setup complete with shiftpod manager"
+      - kubectl get nodes
+      - kubectl get pods -n kube-system -l app=shiftpod-manager
+      - echo "Waiting for manager to be ready..."
+      - kubectl wait --for=condition=ready pod -l app=shiftpod-manager -n kube-system --timeout=60s

@@ -1,5 +1,8 @@
 use anyhow::Result;
-use kube::{Api, Client, ResourceExt};
+use kube::{
+    api::{ListParams, PostParams},
+    Api, Client, ResourceExt,
+};
 use std::pin::Pin;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
@@ -28,6 +31,7 @@ impl ShiftpodManager {
     pub async fn new(node_name: &str, node_address: &str, checkpoint_dir: &str) -> Result<Self> {
         // kubernetes api
         let k8s_client = Client::try_default().await?;
+        // Use cluster-scoped API for ContainerMigrations
         let migrations_api: Api<ContainerMigration> = Api::all(k8s_client.clone());
 
         Ok(Self {
@@ -80,9 +84,10 @@ impl ManagerService for ShiftpodManager {
             },
         );
 
+        // Create cluster-scoped migration CRD
         match self
             .migrations_api
-            .create(&Default::default(), &migration)
+            .create(&PostParams::default(), &migration)
             .await
         {
             Ok(_) => {
@@ -109,7 +114,7 @@ impl ManagerService for ShiftpodManager {
         // Find unclaimed migration CRD
         let migrations = self
             .migrations_api
-            .list(&Default::default())
+            .list(&ListParams::default())
             .await
             .map_err(|e| Status::internal(format!("Failed to list migrations: {}", e)))?;
 
@@ -134,7 +139,7 @@ impl ManagerService for ShiftpodManager {
 
         // Update CRD
         self.migrations_api
-            .replace(&migration.name_any(), &Default::default(), &migration)
+            .replace(&migration.name_any(), &PostParams::default(), &migration)
             .await
             .map_err(|e| Status::internal(format!("Failed to update migration: {}", e)))?;
 
@@ -161,7 +166,7 @@ impl ManagerService for ShiftpodManager {
 
                 let _ = self
                     .migrations_api
-                    .replace(&migration.name_any(), &Default::default(), &migration)
+                    .replace(&migration.name_any(), &PostParams::default(), &migration)
                     .await;
 
                 Ok(Response::new(MigrationRestoreResponse {
@@ -209,7 +214,7 @@ impl ManagerService for ShiftpodManager {
         // Find and update migration status
         let migrations = self
             .migrations_api
-            .list(&Default::default())
+            .list(&ListParams::default())
             .await
             .map_err(|e| Status::internal(format!("Failed to list migrations: {}", e)))?;
 
@@ -233,7 +238,7 @@ impl ManagerService for ShiftpodManager {
 
             let _ = self
                 .migrations_api
-                .replace(&migration.name_any(), &Default::default(), &migration)
+                .replace(&migration.name_any(), &PostParams::default(), &migration)
                 .await;
         }
 

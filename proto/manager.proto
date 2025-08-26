@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package shiftpod.manager.v1;
 
+option go_package = "github.com/kelvinc/shiftpod/proto";
+
 service ManagerService {
   rpc NotifyCheckpoint(NotifyCheckpointRequest) returns (NotifyCheckpointResponse);
   rpc RequestMigrationRestore(MigrationRestoreRequest) returns (MigrationRestoreResponse);

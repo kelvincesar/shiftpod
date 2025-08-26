@@ -1,12 +1,15 @@
 # shiftpod
 
-## Install
+Shiftpod is a distributed container checkpoint/restore system that enables seamless pod migration between Kubernetes nodes. It consists of a Go containerd shim that intercepts container lifecycle events and a Rust manager service that coordinates checkpoints across nodes using Kubernetes Custom Resource Definitions (CRDs).
 
-Install `devenv` to build this project.
+## Installation
+
+### Prerequisites
+
+Install `devenv` to build this project:
 
 ```sh
 devenv shell
-task build
 ```
 
 ## Execute

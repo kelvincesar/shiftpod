@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 
 	taskAPI "github.com/containerd/containerd/api/runtime/task/v3"
@@ -12,12 +11,14 @@ import (
 	"github.com/containerd/errdefs"
 	"github.com/containerd/log"
 	"github.com/kelvinc/shiftpod/internal"
+	pb "github.com/kelvinc/shiftpod/proto"
 )
 
 type shiftpodService struct {
 	runcService        taskAPI.TTRPCTaskService
 	mut                sync.Mutex
 	shiftpodContainers map[string]*ShiftpodContainer
+	managerClient      *managerClient
 }
 
 // Builder for the wrapper
@@ -26,10 +27,15 @@ func NewShiftpodService(runcService taskAPI.TTRPCTaskService) (taskAPI.TTRPCTask
 		log.L.Error("Cannot initialize: underlying runc service is nil")
 		return nil, fmt.Errorf("underlying runc service cannot be nil")
 	}
+
+	// Initialize manager client
+	managerClient := NewManagerClient(DefaultManagerSocket)
+
 	log.L.Info("Shiftpod wrapper initialized successfully")
 	return &shiftpodService{
 		runcService:        runcService,
 		shiftpodContainers: make(map[string]*ShiftpodContainer),
+		managerClient:      managerClient,
 	}, nil
 }
 
@@ -88,41 +94,65 @@ func (s *shiftpodService) Create(ctx context.Context, r *taskAPI.CreateTaskReque
 		return nil, err
 	}
 
-	// Check if a checkpoint exists for this container name
-	// Was trying to store in memory but shims are deleted with container/pod
-	checkpointPath := filepath.Join("/var/lib/shiftpod/checkpoints", cfg.ContainerName)
-	if _, err := os.Stat(checkpointPath); err == nil {
-		internal.Log.Infof("Checkpoint found for container %s, using restore path: %s", cfg.ContainerName, checkpointPath)
+	var checkpointPath string
+	var foundCheckpoint bool
 
-		if cfg.CheckpointEnabled() {
-			internal.Log.Debugf("Container %s has checkpoint enabled, skipping creation", cfg.ContainerName)
-			restoreReq := &taskAPI.CreateTaskRequest{
-				ID:         r.ID,
-				Bundle:     r.Bundle,
-				Rootfs:     r.Rootfs,
-				Terminal:   r.Terminal,
-				Stdin:      r.Stdin,
-				Stdout:     r.Stdout,
-				Stderr:     r.Stderr,
-				Checkpoint: checkpointPath,
-			}
-			// Call runc service to create the container
-			resp, err := s.runcService.Create(ctx, restoreReq)
-			if err != nil {
-				if errdefs.IsNotImplemented(err) {
-					internal.Log.Info("Restore not implemented by underlying shim")
-				} else {
-					internal.Log.Errorf("Restore failed: %v", err)
-				}
-			}
-			return resp, err
+	internal.Log.Debugf("Creating container with name %s. Checkpoint is %t and hash %s", cfg.ContainerName, cfg.CheckpointEnabled(), cfg.PodTemplateHash)
+	// Always query manager for checkpoint availability (local or migration)
+	if cfg.CheckpointEnabled() {
+		internal.Log.Debugf("Querying manager for checkpoint for container %s (template hash: %s)", cfg.ContainerName, cfg.PodTemplateHash)
 
+		if resp, err := s.managerClient.RequestMigrationRestore(ctx, cfg.PodTemplateHash, cfg.PodName, cfg.ContainerName); err == nil && resp.Found {
+			checkpointPath = resp.CheckpointPath
+			foundCheckpoint = true
+			internal.Log.Infof("Found checkpoint from manager: %s", checkpointPath)
+		} else if err != nil {
+			internal.Log.Warnf("Failed to query manager for checkpoint: %v", err)
+		} else {
+			internal.Log.Debugf("No checkpoint available from manager for container %s", cfg.ContainerName)
 		}
-	} else {
-		container := NewShiftpodContainer(ctx, r.ID, cfg)
-		s.setContainer(container)
-		internal.Log.Debugf("Create: ID=%s, Bundle=%s, Config=%+v", r.ID, r.Bundle, cfg)
 	}
+
+	// Use checkpoint if found and checkpoint is enabled
+	if foundCheckpoint && cfg.CheckpointEnabled() {
+		internal.Log.Debugf("Container %s has checkpoint enabled, using restore path: %s", cfg.ContainerName, checkpointPath)
+		restoreReq := &taskAPI.CreateTaskRequest{
+			ID:         r.ID,
+			Bundle:     r.Bundle,
+			Rootfs:     r.Rootfs,
+			Terminal:   r.Terminal,
+			Stdin:      r.Stdin,
+			Stdout:     r.Stdout,
+			Stderr:     r.Stderr,
+			Checkpoint: checkpointPath,
+		}
+
+		// Call runc service to create the container with checkpoint
+		resp, err := s.runcService.Create(ctx, restoreReq)
+
+		// Notify manager of restore completion
+		restoreSuccess := err == nil
+		if notifyErr := s.managerClient.FinishRestore(ctx, r.ID, restoreSuccess); notifyErr != nil {
+			internal.Log.Warnf("Failed to notify manager of restore completion: %v", notifyErr)
+		}
+
+		if err != nil {
+			if errdefs.IsNotImplemented(err) {
+				internal.Log.Info("Restore not implemented by underlying shim")
+			} else {
+				internal.Log.Errorf("Restore failed: %v", err)
+			}
+		} else {
+			internal.Log.Infof("Successfully restored container %s from checkpoint", r.ID)
+		}
+
+		return resp, err
+	}
+
+	// Create container without checkpoint
+	container := NewShiftpodContainer(ctx, r.ID, cfg)
+	s.setContainer(container)
+	internal.Log.Debugf("Create: ID=%s, Bundle=%s, Config=%+v", r.ID, r.Bundle, cfg)
 
 	// Call runc service to create the container
 	resp, err := s.runcService.Create(ctx, r)
@@ -197,6 +227,21 @@ func (s *shiftpodService) Kill(ctx context.Context, r *taskAPI.KillRequest) (*pt
 			moveCriuLog(r.ID)
 		} else {
 			internal.Log.Debugf("Checkpointed container %s successfully", r.ID)
+
+			// Notify manager of checkpoint creation
+			podInfo := &pb.PodInfo{
+				Name:          container.cfg.PodName,
+				Namespace:     container.cfg.PodNamespace,
+				ContainerName: container.cfg.ContainerName,
+				TemplateHash:  container.cfg.PodTemplateHash,
+			}
+
+			if notifyErr := s.managerClient.NotifyCheckpoint(ctx, r.ID, path, podInfo); notifyErr != nil {
+				internal.Log.Warnf("Failed to notify manager of checkpoint creation: %v", notifyErr)
+				// Continue anyway - fallback to local storage
+			} else {
+				internal.Log.Infof("Successfully notified manager of checkpoint for container %s", r.ID)
+			}
 		}
 	} else {
 		internal.Log.Debugf("Kill: ID=%s, ExecID=%s, Checkpoint not enabled", r.ID, r.ExecID)
@@ -242,6 +287,14 @@ func (s *shiftpodService) Connect(ctx context.Context, r *taskAPI.ConnectRequest
 
 func (s *shiftpodService) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (*ptypes.Empty, error) {
 	internal.Log.Debugf("Shutdown: ID=%s", r.ID)
+
+	// Close manager client connection
+	if s.managerClient != nil {
+		if err := s.managerClient.Close(); err != nil {
+			internal.Log.Warnf("Failed to close manager client: %v", err)
+		}
+	}
+
 	return s.runcService.Shutdown(ctx, r)
 }
 

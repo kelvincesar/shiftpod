@@ -8,8 +8,7 @@ use serde::{Deserialize, Serialize};
     version = "v1",
     kind = "ContainerMigration",
     plural = "containermigrations",
-    status = "ContainerMigrationStatus",
-    namespaced
+    status = "ContainerMigrationStatus"
 )]
 pub struct ContainerMigrationSpec {
     pub pod_template_hash: String,

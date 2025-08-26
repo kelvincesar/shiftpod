@@ -1,34 +1,34 @@
 FROM alpine:3.20 as build
 
 ARG CC=gcc
-ARG CRIU_VERSION=v4.1
+ARG CRIU_VERSION=v4.1.1
 
 # install alpine dependencies
 RUN apk --update --no-cache add \
-	$CC \
-	bash \
-	build-base \
-	coreutils \
-	procps \
-	git \
-	gnutls-dev \
-	libaio-dev \
-	libcap-dev \
-	libnet-dev \
-	libnl3-dev \
-	nftables \
-	nftables-dev \
-	pkgconfig \
-	protobuf-c-dev \
-	protobuf-dev \
-	py3-pip \
-	py3-protobuf \
-	python3 \
-	sudo \
-	libcap-utils \
-	libdrm-dev \
-	util-linux \
-	util-linux-dev \
+    $CC \
+    bash \
+    build-base \
+    coreutils \
+    procps \
+    git \
+    gnutls-dev \
+    libaio-dev \
+    libcap-dev \
+    libnet-dev \
+    libnl3-dev \
+    nftables \
+    nftables-dev \
+    pkgconfig \
+    protobuf-c-dev \
+    protobuf-dev \
+    py3-pip \
+    py3-protobuf \
+    python3 \
+    sudo \
+    libcap-utils \
+    libdrm-dev \
+    util-linux \
+    util-linux-dev \
     tar
 
 WORKDIR /workspace

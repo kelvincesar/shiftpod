@@ -5,22 +5,30 @@ use tracing;
 #[command(name = "shiftpod-manager")]
 #[command(about = "Shiftpod migration manager")]
 pub struct Args {
-    #[arg(long, default_value = "localhost")]
+    #[arg(long, env = "NODE_NAME", default_value = "localhost")]
     node_name: String,
 
-    #[arg(long, default_value = "127.0.0.1")]
+    #[arg(long, env = "NODE_IP", default_value = "127.0.0.1")]
     node_address: String,
 
-    #[arg(long, default_value = "/tmp/shiftpod/checkpoints")]
+    #[arg(
+        long,
+        env = "CHECKPOINT_DIR",
+        default_value = "/var/lib/shiftpod/checkpoints"
+    )]
     checkpoint_dir: String,
 
-    #[arg(long, default_value = "/tmp/shiftpod/manager.sock")]
+    #[arg(
+        long,
+        env = "SOCKET_PATH",
+        default_value = "/var/run/shiftpod/manager.sock"
+    )]
     unix_socket: String,
 
-    #[arg(long, default_value = "9090")]
+    #[arg(long, env = "GRPC_PORT", default_value = "9090")]
     grpc_port: u16,
 
-    #[arg(long, default_value = "info")]
+    #[arg(long, env = "RUST_LOG", default_value = "info")]
     log_level: String,
 }
 
