@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/kelvinc/shiftpod/internal"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -39,6 +40,14 @@ func NewConfig(ctx context.Context, spec *specs.Spec) (*Config, error) {
 	podName := spec.Annotations[PodNameAnnotation]
 	podNamespace := spec.Annotations[PodNamespaceAnnotation]
 
+	// Debug: Log all available annotations
+	if spec.Annotations != nil {
+		internal.Log.Debugf("Available annotations:")
+		for key, value := range spec.Annotations {
+			internal.Log.Debugf("  %s = %s", key, value)
+		}
+	}
+
 	// Extract pod template hash from annotations if available
 	var podTemplateHash string
 	if spec.Annotations != nil {
@@ -47,6 +56,18 @@ func NewConfig(ctx context.Context, spec *specs.Spec) (*Config, error) {
 			podTemplateHash = val
 		} else if val, ok := spec.Annotations["pod-template-hash"]; ok {
 			podTemplateHash = val
+		} else if val, ok := spec.Annotations["io.kubernetes.pod.uid"]; ok {
+			// Fallback: try to extract from pod UID or name
+			internal.Log.Debugf("Pod UID: %s", val)
+		}
+		// Check for Kubernetes labels passed as annotations
+		for key, value := range spec.Annotations {
+			if strings.Contains(key, "template-hash") || strings.Contains(key, "pod-template") {
+				internal.Log.Debugf("Found template hash candidate: %s = %s", key, value)
+				if podTemplateHash == "" {
+					podTemplateHash = value
+				}
+			}
 		}
 	}
 
