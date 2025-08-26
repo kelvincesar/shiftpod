@@ -16,7 +16,7 @@ spec:
     spec:
       runtimeClassName: shiftpod-class
       containers:
-        - image: kelvin/counter:latest
+        - image: shiftpod/counter:latest
           name: counter
           imagePullPolicy: Never
           resources:

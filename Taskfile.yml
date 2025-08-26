@@ -112,14 +112,14 @@ tasks:
     desc: Build counter example and deploy to k3d
     cmds:
       - docker build -f ./k3s/counter/Dockerfile.counter -t shiftpod/counter:latest .
-      - k3d image import kelvin/counter:latest -c shift-cluster
+      - k3d image import shiftpod/counter:latest -c shift-cluster
       - kubectl apply -f ./k3s/counter/deployment.yaml
       - kubectl rollout restart deployment counter
 
   counter:logs:
     desc: Get counter logs from k3d
     cmds:
-      - kubectl logs counter
+      - kubectl logs deploy/counter --all-containers=true
 
   counter:delete:
     desc: Delete counter example from k3d

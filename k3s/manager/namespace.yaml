@@ -7,7 +7,6 @@ metadata:
     app.kubernetes.io/name: shiftpod-system
     app.kubernetes.io/component: system
     app.kubernetes.io/part-of: shiftpod
-    app.kubernetes.io/managed-by: kubectl
   annotations:
     kubernetes.io/description: "Namespace for Shiftpod manager"
     shiftpod.io/version: "v1"
